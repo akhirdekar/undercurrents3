@@ -1,0 +1,3 @@
+dataset,row_count,columns,null_values,duplicate_ids,distinct_coordinates
+basins,154212,3,0,0,154196
+complaints,58965,4,0,0,36992

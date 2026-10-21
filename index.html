@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Explore New York City's catch basin network, 311 reports, and precipitation through an interactive D3.js map and timeline.">
+  <meta name="theme-color" content="#091c2e">
+  <title>The Iron Grid | NYC Stormwater Explorer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%23252b30'/%3E%3Cpath d='M10 10v20m7-20v20m7-20v20m7-20v20M7 16h27M7 24h27' stroke='%23ffffff' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="preload" href="vendor/BarlowCondensed-Black.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <script src="vendor/d3.min.js" defer></script>
+  <script type="module" src="app.mjs"></script>
+</head>
+<body>
+<a class="skip" href="#map">Skip to map</a>
+<main class="atlas" id="explorer" aria-label="NYC catch basin map">
+  <div class="workspace" id="workspace" aria-busy="true">
+    <div class="map-wrap" id="map-wrap">
+      <canvas id="map" tabindex="0" aria-label="NYC catch basins and 311 reports. Drag to pan, scroll to zoom, or open the area table in About."></canvas>
+      <div class="map-tooltip" id="map-tooltip" hidden></div>
+    </div>
+  </div>
+  <header class="map-header">
+    <div class="wordmark"><h1>The Iron Grid</h1><p>Stormwater / New York City</p></div>
+    <nav class="map-controls" aria-label="Map controls">
+      <label class="sr-only" for="borough">Borough</label><select id="borough"><option value="0">All NYC</option></select>
+      <label class="sr-only" for="metric">Show</label><select id="metric"><option value="basins">Catch basins</option><option value="reports">311 reports</option><option value="ratio">Reports / 100 basins</option></select>
+      <details id="layers-panel" class="layers-panel"><summary>Layers</summary><div class="layers-content">
+        <label for="map-style">Map view</label><select id="map-style"><option value="points">Street points</option><option value="hex">1 km² areas</option></select>
+        <label for="category">Problem</label><select id="category"><option value="-1">All problems</option></select>
+        <label class="check"><input type="checkbox" id="report-dots"> Show report points</label>
+        <p id="metric-note" class="field-note">Each area covers 1 km².</p>
+        <div class="layer-links"><button id="east-village">East Village</button><button id="most-reports">Area with most reports</button><button id="export">Download area counts</button><button id="reset">Reset map</button></div>
+      </div></details>
+      <button id="open-about" class="nav-link">About</button>
+    </nav>
+  </header>
+  <div id="load-state" class="load-state" role="status">Loading map…</div>
+  <aside class="area-panel" id="area-panel" hidden aria-label="Selected area">
+    <div class="panel-heading"><span>Selected area</span><button id="close-area" aria-label="Close area details">×</button></div>
+    <div id="selection" aria-live="polite"></div>
+    <button id="pin-cell" class="plain-link" disabled>Add to comparison</button><div id="pins"></div>
+  </aside>
+  <div class="map-info">
+    <div class="map-readout"><span id="map-title">Catch basins</span><span id="view-label">Street points</span></div>
+    <div id="map-legend" class="map-legend"></div>
+    <div class="stats"><span><strong id="count-basins">—</strong> basins</span><span><strong id="count-reports">—</strong> reports</span></div>
+  </div>
+  <div class="map-tools" aria-label="Map navigation"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-reset" class="fit-button" aria-label="Show all NYC">Fit</button></div>
+  <div class="map-help">Drag to pan / Scroll to zoom</div>
+  <details id="rain-panel" class="rain-dock">
+    <summary><span>Rain &amp; reports</span><span id="active-period">2020–2026</span></summary>
+    <div class="rain-content">
+      <div class="date-controls">
+        <fieldset class="date-fields"><legend>Report dates</legend><div><label for="date-start">From</label><input type="date" id="date-start"></div><div><label for="date-end">To</label><input type="date" id="date-end"></div></fieldset>
+        <button id="all-dates" class="plain-link">Clear dates</button><button id="clear-brush" hidden>Clear dates</button>
+        <p class="chart-note">Drag across the chart to choose dates.<br>Rain measured in Central Park only.</p>
+      </div>
+      <div class="chart-container"><div id="timeline" class="timeline" aria-label="Rainfall and reports over time"></div><div class="chart-footer"><div id="date-live" aria-live="polite"></div><div class="storm-row"><span>Wet days</span><div id="storm-buttons"></div></div></div></div>
+    </div>
+  </details>
+</main>
+<dialog id="about" aria-labelledby="about-title"><div class="dialog-heading"><h2 id="about-title">About the map</h2><button id="close-about" aria-label="Close About">×</button></div><p class="about-intro">Catch basins, reported problems and rainfall. For exploring places worth a closer look.</p><button id="open-tour" class="plain-link">How to use the map</button>
+  <section class="extras" aria-label="More data">
+    <details class="breakdown"><summary>Reports by problem</summary><div id="categories"></div></details>
+    <details class="rank-section"><summary id="rank-title">View areas as a table</summary>
+<div class="table-wrap"><table><caption id="rank-caption">Top six areas in this view</caption><thead><tr><th scope="col">Area</th><th scope="col">Basins</th><th scope="col">Reports</th><th scope="col">Reports / 100 basins</th><th scope="col"></th></tr></thead><tbody id="ranked"></tbody></table></div></details>
+  </section>
+  <section class="method" id="method"><h2>About the data</h2>
+    <div class="method-details"><details><summary>About this project</summary><p><strong>Where do mapped catch basins and reported catch basin problems overlap, and how do report patterns change around wet periods?</strong> The primary audience is civil engineers and environmental planners preparing questions for site visits; community boards and residents can explore the same evidence.</p><p>Undercurrents appears here as both hidden infrastructure and the less visible work of noticing, reporting and maintaining it.</p></details>
+    <details><summary>How the data was prepared</summary><div id="data-audit"></div><p>The report file labels its request numbers UNITID. These were renamed REQUEST_ID to avoid confusion with basin IDs. A report number and a basin ID refer to different things; we do not match them to each other.</p><p>Original coordinates and problem descriptions are kept. Dates were recovered by looking up each exact 311 request number. We checked for repeated IDs, missing values and coordinates outside NYC. Full NYC borough outlines were used to place records; the outlines on screen are simplified for faster drawing.</p><p>Each hexagon covers 1 km². Areas at the edges may include water or land outside NYC. Counts are not adjusted for land area, road length or population. Borough filters count only records in that borough. Different basin IDs at the same coordinates are kept. The color scale changes with your filters.</p><a href="data/manifest.json" download>Data notes (JSON)</a> · <a href="data/cleaning_audit.csv" download>Cleaning summary (CSV)</a> · <a href="data/enriched_complaints.csv" download>Reports with dates (CSV)</a></details>
+    <details><summary>About the rainfall</summary><p>Rain comes from NOAA’s daily Central Park record, station USW00094728. Values are converted from tenths of a millimeter to millimeters. Readings marked with a quality problem, or a missing-value code, are left out. Trace amounts appear as zero and are marked in the chart readout.</p><p>Central Park does not measure rain across every borough. Rainfall observation days may differ from the calendar days in 311. Storms, seasons and reporting delays affect comparisons. A wet-day shortcut shows two days before and four days after the reading, so you can look for delayed reports. This does not prove that rain caused a problem.</p><p>Daily totals include the water equivalent of snow and other frozen precipitation. They do not show how hard it rained in a short burst. Missing readings remain gaps, rather than becoming zero.</p></details>
+    <details><summary>What the data can’t tell us</summary><p>311 shows what people report, and who can access reporting. It does not capture every drainage problem. Several requests may concern the same place. More drains do not necessarily mean better drainage; more reports do not necessarily mean worse service. Names, contact details and street addresses are not shown.</p><p>The basin file does not show condition, how much water an inlet or pipe can carry, repair results, the area draining into it, height or a history of installations. A closed request does not confirm a repair, so closure is not used to judge performance.</p><p>“Reports per 100 basins” divides reports in an area by the fixed number of mapped basins, then multiplies by 100. Basin counts stay fixed when dates change. This is not a failure rate: reports are not linked to individual basins. A ratio based on very few basins can be misleading.</p><p>The supplied reports are part of the source system, not a confirmed complete record. The original download date and earlier cleaning steps were not provided. Choosing dates does not make the file complete. This educational project uses public data; public availability is not treated as proof of consent.</p></details>
+    <details><summary>Possible next steps</summary><p>A useful next layer is NYC’s official stormwater flood map, with each rainfall scenario and its assumptions clearly labeled. Ground height alone cannot tell us whether a drain is adequate. Slope, paved surfaces, drain shape, pipes and rainfall intensity also matter.</p><p>Ground-height data should state its detail, date, map coordinates and how heights are referenced. Measure it consistently and keep ground height separate from water depth. Comparing rainfall across neighborhoods would need several gauges or a documented radar dataset.</p><a href="https://data.cityofnewyork.us/Environment/NYC-Stormwater-Flood-Maps/9i7c-xyvv" target="_blank" rel="noopener">NYC stormwater flood maps</a></details>
+    <details><summary>Sources and credits</summary><ul id="source-list"></ul><p>Abhijeet Khirdekar · The Cooper Union · Data Visualization Midterm, Part 2 · Theme: Undercurrents. Built with D3.js 7.9.0. NYC Open Data and NOAA are sources; this student project is not an agency endorsement.</p><p>Gallery criteria addressed: Understanding, Usefulness, Design and Transparency. Code and the preparation workflow are included with the project package.</p></details></div>
+  </section>
+<footer>Abhijeet Khirdekar · The Cooper Union · Undercurrents, 2026</footer></dialog>
+<dialog id="tour" aria-labelledby="tour-title">
+  <div class="tour-top"><span>Quick guide</span><button id="tour-close" aria-label="Close guide">×</button></div>
+  <div class="tour-progress" id="tour-progress"></div><div class="tour-number" id="tour-number"></div>
+  <h2 id="tour-title"></h2><p id="tour-copy"></p><div class="tour-example" id="tour-example"></div>
+  <div class="tour-actions"><button class="text-button" id="tour-back">Back</button><button class="primary" id="tour-next">Next</button></div>
+</dialog>
+</body></html>
